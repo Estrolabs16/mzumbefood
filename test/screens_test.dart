@@ -149,6 +149,9 @@ void main() {
     expect(find.text(S.debts), findsOneWidget);
     expect(find.text(S.analytics), findsOneWidget);
     expect(find.text(S.profile), findsOneWidget);
+
+    final homeCenter = tester.getCenter(find.byKey(const Key('nav-home')));
+    expect(homeCenter.dx, closeTo(540, 2));
   });
 }
 
