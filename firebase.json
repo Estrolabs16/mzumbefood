@@ -1,0 +1,26 @@
+{
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "estroshopstz",
+          "appId": "1:809957892256:android:376f8017f9dc2e18bca9c5",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "estroshopstz",
+          "configurations": {
+            "android": "1:809957892256:android:376f8017f9dc2e18bca9c5",
+            "ios": "1:809957892256:ios:71dbad795378a6fdbca9c5"
+          }
+        }
+      }
+    }
+  }
+}
