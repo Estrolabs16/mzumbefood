@@ -18,18 +18,20 @@ class SacksScreen extends StatefulWidget {
 }
 
 class _SacksScreenState extends State<SacksScreen> {
-  Future<void> _openEditor() async {
+  Future<void> _openEditor({Sack? sack}) async {
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => const _SackEditor(),
+      builder: (context) => _SackEditor(sack: sack),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     final data = context.watch<DataProvider>();
+    final stats = buildSackStats(sacks: data.sacks, sales: data.sales);
+    final statsById = {for (final item in stats) item.sack.id: item};
     final active = data.sacks
         .where((sack) => sack.finishedDate == null)
         .toList()
@@ -56,7 +58,7 @@ class _SacksScreenState extends State<SacksScreen> {
                 SoftCard(
                   color: AppColors.blueSoft,
                   child: const Text(
-                    'Track each sack from the day you buy it. The app shows how many days it lasted and the cost per day.',
+                    'Record the price of each sack. Link sales to a sack to see revenue, ingredient cost and profit for every day the sack was used.',
                     style: TextStyle(color: AppColors.ink, fontSize: 14),
                   ),
                 ),
@@ -75,85 +77,22 @@ class _SacksScreenState extends State<SacksScreen> {
                   )
                 else
                   ...active.map(
-                    (sack) => SoftCard(
-                      padding: const EdgeInsets.all(18),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              const Text('🥔', style: TextStyle(fontSize: 32)),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      sack.product,
-                                      style: const TextStyle(
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.w900,
-                                        color: AppColors.ink,
-                                      ),
-                                    ),
-                                    Text(
-                                      'Bought ${Fmt.date(sack.boughtDate)}',
-                                      style: const TextStyle(
-                                        color: AppColors.muted,
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              Text(
-                                Fmt.money(sack.cost),
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w900,
-                                  color: AppColors.accent,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 16),
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
-                            child: LinearProgressIndicator(
-                              value: (sack.daysLasted % 14) / 14,
-                              minHeight: 10,
-                              backgroundColor: AppColors.blueSoft,
-                              color: AppColors.primaryDark,
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              _SackValue(
-                                  '${sack.daysLasted}', 'days so far'),
-                              _SackValue(
-                                  Fmt.money(sack.costPerDay), 'cost per day'),
-                            ],
-                          ),
-                          const SizedBox(height: 16),
-                          PrimaryButton(
-                            label: S.finishSack,
-                            color: AppColors.primaryDark,
-                            onPressed: () async {
-                              final confirm = await confirmAction(
-                                context,
-                                title: S.finishSack,
-                                message: 'Mark this sack as finished today?',
+                    (sack) => _SackCard(
+                      sack: sack,
+                      stats: statsById[sack.id],
+                      onEdit: () => _openEditor(sack: sack),
+                      onFinish: () async {
+                        final confirm = await confirmAction(
+                          context,
+                          title: S.finishSack,
+                          message: 'Mark this sack as finished today?',
+                        );
+                        if (confirm && context.mounted) {
+                          await context.read<DataStore>().saveSack(
+                                sack.copyWith(finishedDate: DateTime.now()),
                               );
-                              if (confirm && context.mounted) {
-                                await context.read<DataStore>().saveSack(
-                                      sack.copyWith(finishedDate: DateTime.now()),
-                                    );
-                              }
-                            },
-                          ),
-                        ],
-                      ),
+                        }
+                      },
                     ),
                   ),
                 const SizedBox(height: 24),
@@ -166,7 +105,8 @@ class _SacksScreenState extends State<SacksScreen> {
                           children: [
                             Text(
                               Fmt.number(average(
-                                finished.map((sack) => sack.daysLasted.toDouble())),),
+                                finished.map((sack) => sack.daysLasted.toDouble()),
+                              )),
                               style: const TextStyle(
                                 fontSize: 22,
                                 fontWeight: FontWeight.w900,
@@ -189,14 +129,15 @@ class _SacksScreenState extends State<SacksScreen> {
                           children: [
                             Text(
                               Fmt.money(average(
-                                finished.map((sack) => sack.cost),)),
+                                finished.map((sack) => sack.cost),
+                              )),
                               style: const TextStyle(
                                 fontSize: 22,
                                 fontWeight: FontWeight.w900,
                                 color: AppColors.accent,
                               ),
                             ),
-                            const Text('Average cost / sack',
+                            const Text('Average sack price',
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
                                     color: AppColors.muted, fontSize: 12)),
@@ -214,56 +155,25 @@ class _SacksScreenState extends State<SacksScreen> {
                     child: EmptyState(
                       icon: Icons.history,
                       title: 'No finished sacks yet',
-                      message: 'Finished sacks will appear here with their cost per day.',
+                      message: 'Finished sacks will appear here with their full profit.',
                     ),
                   )
                 else
                   ...history.map(
-                    (sack) => SoftCard(
-                      padding: const EdgeInsets.all(14),
-                      child: Row(
-                        children: [
-                          const Text('🥔', style: TextStyle(fontSize: 26)),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  sack.product,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w800,
-                                    color: AppColors.ink,
-                                  ),
-                                ),
-                                Text(
-                                  '${sack.daysLasted} days • ${Fmt.money(sack.costPerDay)}/day',
-                                  style: const TextStyle(
-                                    color: AppColors.muted,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.delete_outline,
-                                color: AppColors.danger),
-                            onPressed: () async {
-                              final confirm = await confirmAction(
-                                context,
-                                title: S.confirmDelete,
-                                message: 'Delete this sack record?',
-                              );
-                              if (confirm && context.mounted) {
-                                await context
-                                    .read<DataStore>()
-                                    .deleteSack(sack.id);
-                              }
-                            },
-                          ),
-                        ],
-                      ),
+                    (sack) => _SackCard(
+                      sack: sack,
+                      stats: statsById[sack.id],
+                      onEdit: () => _openEditor(sack: sack),
+                      onDelete: () async {
+                        final confirm = await confirmAction(
+                          context,
+                          title: S.confirmDelete,
+                          message: 'Delete this sack record?',
+                        );
+                        if (confirm && context.mounted) {
+                          await context.read<DataStore>().deleteSack(sack.id);
+                        }
+                      },
                     ),
                   ),
               ],
@@ -272,31 +182,269 @@ class _SacksScreenState extends State<SacksScreen> {
   }
 }
 
+class _SackCard extends StatelessWidget {
+  final Sack sack;
+  final SackStats? stats;
+  final VoidCallback onEdit;
+  final VoidCallback? onFinish;
+  final VoidCallback? onDelete;
+
+  const _SackCard({
+    required this.sack,
+    required this.stats,
+    required this.onEdit,
+    this.onFinish,
+    this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final usedDays = stats?.days.where((day) => day.revenue > 0).toList() ?? [];
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: SoftCard(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Text('🥔', style: TextStyle(fontSize: 30)),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        sack.product,
+                        style: const TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w900,
+                          color: AppColors.ink,
+                        ),
+                      ),
+                      Text(
+                        'Bought ${Fmt.date(sack.boughtDate)}',
+                        style: const TextStyle(
+                          color: AppColors.muted,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    const Text(S.sackPrice,
+                        style: TextStyle(
+                          color: AppColors.muted,
+                          fontSize: 10,
+                        )),
+                    Text(
+                      Fmt.money(sack.cost),
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w900,
+                        color: AppColors.accent,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: LinearProgressIndicator(
+                value: (sack.daysLasted % 14) / 14,
+                minHeight: 9,
+                backgroundColor: AppColors.blueSoft,
+                color: AppColors.primaryDark,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: _SackValue('${sack.daysLasted}', 'days'),
+                ),
+                Expanded(
+                  child: _SackValue(Fmt.money(sack.costPerDay), 'cost / day'),
+                ),
+                Expanded(
+                  child: _SackValue(
+                    Fmt.money(stats?.revenue ?? 0),
+                    'revenue',
+                    color: AppColors.primaryDark,
+                  ),
+                ),
+              ],
+            ),
+            if (stats != null) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.blueSoft,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    _SackValue(
+                      Fmt.money(stats!.ingredientCost),
+                      'ingredient cost',
+                    ),
+                    _SackValue(
+                      Fmt.money(stats!.sackCost),
+                      'sack cost',
+                      color: AppColors.accent,
+                    ),
+                    _SackValue(
+                      Fmt.money(stats!.profit),
+                      'profit',
+                      color: AppColors.success,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            if (usedDays.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Material(
+                color: Colors.transparent,
+                child: ExpansionTile(
+                tilePadding: EdgeInsets.zero,
+                childrenPadding: EdgeInsets.zero,
+                iconColor: AppColors.primaryDark,
+                collapsedIconColor: AppColors.primaryDark,
+                title: const Text(
+                  'Sales by day',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.ink,
+                  ),
+                ),
+                subtitle: Text(
+                  '${usedDays.length} day${usedDays.length == 1 ? '' : 's'} with sales',
+                  style: const TextStyle(
+                    color: AppColors.muted,
+                    fontSize: 12,
+                  ),
+                ),
+                children: usedDays
+                    .map(
+                      (day) => Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 6),
+                        child: Row(
+                          children: [
+                            SizedBox(
+                              width: 66,
+                              child: Text(
+                                Fmt.shortDate(day.date),
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w800,
+                                  color: AppColors.ink,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                            Expanded(
+                              child: Text(
+                                'In ${Fmt.money(day.revenue)}',
+                                style: const TextStyle(
+                                  color: AppColors.primaryDark,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                            Expanded(
+                              child: Text(
+                                'Cost ${Fmt.money(day.ingredientCost + day.sackCost)}',
+                                style: const TextStyle(
+                                  color: AppColors.accent,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                            Text(
+                              Fmt.money(day.profit),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w900,
+                                color: AppColors.success,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
+                    .toList(),
+                ),
+              ),
+            ],
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                TextButton.icon(
+                  onPressed: onEdit,
+                  icon: const Icon(Icons.edit_outlined, size: 18),
+                  label: const Text(S.edit),
+                ),
+                const Spacer(),
+                if (onFinish != null)
+                  TextButton.icon(
+                    onPressed: onFinish,
+                    icon: const Icon(Icons.check_circle_outline, size: 18),
+                    label: const Text(S.finishSack),
+                  ),
+                if (onDelete != null)
+                  IconButton(
+                    tooltip: S.delete,
+                    icon: const Icon(Icons.delete_outline, color: AppColors.danger),
+                    onPressed: onDelete,
+                  ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _SackValue extends StatelessWidget {
   final String value;
   final String label;
+  final Color color;
 
-  const _SackValue(this.value, this.label);
+  const _SackValue(this.value, this.label, {this.color = AppColors.ink});
 
   @override
   Widget build(BuildContext context) => Column(
         children: [
           Text(
             value,
-            style: const TextStyle(
-              fontSize: 18,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 15,
               fontWeight: FontWeight.w900,
-              color: AppColors.ink,
+              color: color,
             ),
           ),
+          const SizedBox(height: 2),
           Text(label,
-              style: const TextStyle(color: AppColors.muted, fontSize: 12)),
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: AppColors.muted, fontSize: 11)),
         ],
       );
 }
 
 class _SackEditor extends StatefulWidget {
-  const _SackEditor();
+  final Sack? sack;
+
+  const _SackEditor({this.sack});
 
   @override
   State<_SackEditor> createState() => _SackEditorState();
@@ -304,11 +452,23 @@ class _SackEditor extends StatefulWidget {
 
 class _SackEditorState extends State<_SackEditor> {
   final _formKey = GlobalKey<FormState>();
-  final _product = TextEditingController(text: 'Potatoes');
-  final _cost = TextEditingController();
-  final _note = TextEditingController();
-  DateTime _date = DateTime.now();
+  late final TextEditingController _product;
+  late final TextEditingController _cost;
+  late final TextEditingController _note;
+  late DateTime _date;
   bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final sack = widget.sack;
+    _product = TextEditingController(text: sack?.product ?? 'Potatoes');
+    _cost = TextEditingController(
+      text: sack == null ? '' : sack.cost.toStringAsFixed(0),
+    );
+    _note = TextEditingController(text: sack?.note ?? '');
+    _date = sack?.boughtDate ?? DateTime.now();
+  }
 
   @override
   void dispose() {
@@ -321,13 +481,14 @@ class _SackEditorState extends State<_SackEditor> {
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
+    final existing = widget.sack;
     final sack = Sack(
-      id: newId(),
+      id: existing?.id ?? newId(),
       product: _product.text.trim(),
       boughtDate: _date,
       dayKey: Fmt.dayKey(_date),
       cost: double.parse(_cost.text.trim()),
-      finishedDate: null,
+      finishedDate: existing?.finishedDate,
       note: _note.text.trim(),
     );
     await context.read<DataStore>().saveSack(sack);
@@ -356,9 +517,9 @@ class _SackEditorState extends State<_SackEditor> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Text(
-                  'Add a sack',
-                  style: TextStyle(
+                Text(
+                  widget.sack == null ? 'Add a sack' : 'Edit sack',
+                  style: const TextStyle(
                     fontSize: 21,
                     fontWeight: FontWeight.w900,
                     color: AppColors.ink,
@@ -376,10 +537,10 @@ class _SackEditorState extends State<_SackEditor> {
                 TextFormField(
                   controller: _cost,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Cost (TSh)'),
+                  decoration: const InputDecoration(labelText: S.sackPrice),
                   validator: (value) {
                     final amount = double.tryParse(value ?? '');
-                    if (amount == null || amount <= 0) return 'Enter a cost.';
+                    if (amount == null || amount <= 0) return 'Enter a price.';
                     return null;
                   },
                 ),

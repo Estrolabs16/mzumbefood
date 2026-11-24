@@ -121,11 +121,15 @@ Security rules currently allow public read/write for all Firestore documents.
 - Personal income and personal expenses never affect business totals.
 - Ingredient costs and `otherCost` are captured on each sale line for historical profit accuracy.
 - Money is stored with full precision and displayed as whole Tanzanian shillings.
+- Batch entry saves every food item as its own order with its own date, note, sack link and debt.
+- Sack profit is revenue minus ingredient cost minus the entered sack price, grouped by the days the sack was used.
+- Every screen has a back action; subpages use push navigation so back returns instead of exiting the app.
+- The floating bottom bar keeps Home centered and follows the active route.
 
 ## Test coverage
 
-- Unit tests: formatting, day keys, revenue/profit totals.
-- Widget tests: shared widgets and every screen.
+- Unit tests: formatting, day keys, revenue/profit totals, debt direction, sack day grouping.
+- Widget tests: shared widgets, back-enabled headers, batch order controls and every screen.
 - Flow tests: debt payment flow, sample menu seeding, personal/business separation, expense-name usage.
 
 ## Completion checklist
@@ -144,7 +148,7 @@ Security rules currently allow public read/write for all Firestore documents.
 | Profile, personal budget, personal income, expense names | Done |
 | Firestore rules and indexes written | Done |
 | Static analysis | Done: `No issues found!` |
-| Automated tests | Done: 29 tests passed |
+| Automated tests | Done: 31 tests passed |
 | Firestore public rules deployment | Done |
 | Live Firebase signup/write/signout/signin verification | Pending |
 | iOS simulator verification | Not available on Windows |

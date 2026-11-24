@@ -42,152 +42,199 @@ class _LineEditor {
   }
 }
 
+MenuItem? _findItem(List<MenuItem> items, String id) {
+  for (final item in items) {
+    if (item.id == id) return item;
+  }
+  return null;
+}
+
+double _linePrice(MenuItem? item, _LineEditor line) {
+  final override = double.tryParse(line.price.text.trim());
+  if (override != null && override > 0) return override;
+  return item?.price ?? 0;
+}
+
+double _lineQty(_LineEditor line) =>
+    double.tryParse(line.qty.text.trim()) ?? 0;
+
+class _OrderDraft {
+  final String? existingId;
+  final DateTime? createdAt;
+  final TextEditingController note;
+  final TextEditingController customer;
+  final TextEditingController phone;
+  final List<_LineEditor> lines;
+  DateTime date;
+  DateTime? deadline;
+  bool unpaid;
+  String? sackId;
+
+  _OrderDraft({
+    this.existingId,
+    this.createdAt,
+    required this.date,
+    List<_LineEditor>? lines,
+    String noteText = '',
+    String customerText = '',
+    String phoneText = '',
+    this.unpaid = false,
+    this.sackId,
+  })  : note = TextEditingController(text: noteText),
+        customer = TextEditingController(text: customerText),
+        phone = TextEditingController(text: phoneText),
+        lines = lines ?? [_LineEditor()];
+
+  double total(List<MenuItem> menu) => lines.fold(
+        0,
+        (sum, line) =>
+            sum + _linePrice(_findItem(menu, line.menuItemId), line) * _lineQty(line),
+      );
+
+  void dispose() {
+    note.dispose();
+    customer.dispose();
+    phone.dispose();
+    for (final line in lines) {
+      line.dispose();
+    }
+  }
+}
+
 class _AddSaleScreenState extends State<AddSaleScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _orderNote = TextEditingController();
-  final _customer = TextEditingController();
-  final _phone = TextEditingController();
-  final List<_LineEditor> _lines = [_LineEditor()];
-  DateTime _date = DateTime.now();
-  DateTime? _deadline;
-  bool _unpaid = false;
+  late final List<_OrderDraft> _orders;
   bool _saving = false;
 
   @override
   void initState() {
     super.initState();
+    var initial = DateTime.now();
     if (widget.initialDate != null) {
-      _date = Fmt.parseDayKey(widget.initialDate!);
+      initial = Fmt.parseDayKey(widget.initialDate!);
     }
     final data = context.read<DataProvider>();
+    _orders = [_OrderDraft(date: initial)];
     if (widget.saleId != null) {
       final existing = data.sales
           .where((element) => element.id == widget.saleId)
           .firstOrNull;
       if (existing != null) {
-        _date = existing.date;
-        _orderNote.text = existing.note;
-        _unpaid = !existing.paid;
-        _lines
-          ..clear()
-          ..addAll(
-            existing.items.map(
-              (line) => _LineEditor(
-                menuItemId: line.menuItemId,
-                quantity: Fmt.number(line.qty),
-                priceText: line.unitPrice.toStringAsFixed(0),
-                noteText: line.note,
-              ),
-            ),
-          );
+        _orders = [
+          _OrderDraft(
+            existingId: existing.id,
+            createdAt: existing.createdAt,
+            date: existing.date,
+            noteText: existing.note,
+            unpaid: !existing.paid,
+            sackId: existing.sackId,
+            lines: existing.items
+                .map(
+                  (line) => _LineEditor(
+                    menuItemId: line.menuItemId,
+                    quantity: Fmt.number(line.qty),
+                    priceText: line.unitPrice.toStringAsFixed(0),
+                    noteText: line.note,
+                  ),
+                )
+                .toList(),
+          ),
+        ];
       }
     }
   }
 
   @override
   void dispose() {
-    _orderNote.dispose();
-    _customer.dispose();
-    _phone.dispose();
-    for (final line in _lines) {
-      line.dispose();
+    for (final order in _orders) {
+      order.dispose();
     }
     super.dispose();
   }
 
-  MenuItem? _find(List<MenuItem> items, String id) {
-    for (final item in items) {
-      if (item.id == id) return item;
-    }
-    return null;
-  }
-
-  double _linePrice(MenuItem? item, _LineEditor line) {
-    final override = double.tryParse(line.price.text.trim());
-    if (override != null && override > 0) return override;
-    return item?.price ?? 0;
-  }
-
-  double _lineQty(_LineEditor line) => double.tryParse(line.qty.text.trim()) ?? 0;
-
-  double _total(List<MenuItem> items) => _lines.fold(
-        0,
-        (sum, line) =>
-            sum + _linePrice(_find(items, line.menuItemId), line) * _lineQty(line),
-      );
-
-  Future<void> _pickDate() async {
+  Future<void> _pickDate(int index) async {
     final picked = await showDatePicker(
       context: context,
-      initialDate: _date,
+      initialDate: _orders[index].date,
       firstDate: DateTime(2020),
       lastDate: DateTime(2035),
     );
-    if (picked != null) setState(() => _date = picked);
+    if (picked != null) setState(() => _orders[index].date = picked);
   }
 
-  Future<void> _pickDeadline() async {
+  Future<void> _pickDeadline(int index) async {
     final picked = await showDatePicker(
       context: context,
-      initialDate: _deadline ?? DateTime.now(),
-      firstDate: DateTime.now(),
+      initialDate: _orders[index].deadline ?? DateTime.now(),
+      firstDate: DateTime(2020),
       lastDate: DateTime(2036),
     );
-    if (picked != null) setState(() => _deadline = picked);
+    if (picked != null) setState(() => _orders[index].deadline = picked);
   }
 
   Future<void> _save(List<MenuItem> menu, List<Ingredient> ingredients) async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
     try {
-      final lines = <SaleLine>[];
-      for (final line in _lines) {
-        final item = _find(menu, line.menuItemId);
-        if (item == null) continue;
-        lines.add(
-          SaleLine(
+      final store = context.read<DataStore>();
+      var savedCount = 0;
+      var reuseExistingId = true;
+      for (final order in _orders) {
+        final sackId = order.sackId == null || order.sackId!.isEmpty
+            ? null
+            : order.sackId;
+        for (final line in order.lines) {
+          final item = _findItem(menu, line.menuItemId);
+          if (item == null) continue;
+          final saleLine = SaleLine(
             menuItemId: item.id,
             name: item.name,
             qty: _lineQty(line),
             unitPrice: _linePrice(item, line),
             unitCostAtSale: item.unitCost(ingredients),
             note: line.note.text.trim(),
-          ),
-        );
+          );
+          final isEdited = order.existingId != null && reuseExistingId;
+          if (isEdited) reuseExistingId = false;
+          final sale = Sale(
+            id: isEdited ? order.existingId! : newId(),
+            date: order.date,
+            dayKey: Fmt.dayKey(order.date),
+            items: [saleLine],
+            total: saleLine.total,
+            cost: saleLine.cost,
+            note: order.note.text.trim(),
+            paid: !order.unpaid,
+            createdAt: isEdited
+                ? order.createdAt ?? DateTime.now()
+                : DateTime.now(),
+            updatedAt: isEdited ? DateTime.now() : null,
+            sackId: sackId,
+          );
+          Debt? debt;
+          if (order.unpaid) {
+            debt = Debt(
+              id: newId(),
+              customer: order.customer.text.trim(),
+              phone: order.phone.text.trim(),
+              reason: sale.itemSummary,
+              amount: sale.total,
+              createdAt: DateTime.now(),
+              dayKey: Fmt.dayKey(DateTime.now()),
+              deadline: order.deadline,
+              paid: false,
+            );
+          }
+          await store.saveSale(sale, debt: debt);
+          savedCount++;
+        }
       }
-      final data = context.read<DataProvider>();
-      final existing = widget.saleId == null
-          ? null
-          : data.sales.where((e) => e.id == widget.saleId).firstOrNull;
-      final sale = Sale(
-        id: existing?.id ?? newId(),
-        date: _date,
-        dayKey: Fmt.dayKey(_date),
-        items: lines,
-        total: lines.fold(0, (sum, line) => sum + line.total),
-        cost: lines.fold(0, (sum, line) => sum + line.cost),
-        note: _orderNote.text.trim(),
-        paid: !_unpaid,
-        createdAt: existing?.createdAt ?? DateTime.now(),
-      );
-      Debt? debt;
-      if (_unpaid) {
-        debt = Debt(
-          id: newId(),
-          customer: _customer.text.trim(),
-          phone: _phone.text.trim(),
-          reason: sale.itemSummary,
-          amount: sale.total,
-          createdAt: DateTime.now(),
-          dayKey: Fmt.dayKey(DateTime.now()),
-          deadline: _deadline,
-          paid: false,
-        );
-      }
-      await context.read<DataStore>().saveSale(sale, debt: debt);
       if (mounted) {
-        showSuccess(context);
-        Navigator.of(context).pop();
+        showSuccess(
+          context,
+          savedCount == 1 ? S.saved : 'Saved $savedCount orders',
+        );
+        context.go('/home');
       }
     } catch (error) {
       if (mounted) {
@@ -204,10 +251,20 @@ class _AddSaleScreenState extends State<AddSaleScreen> {
   Widget build(BuildContext context) {
     final data = context.watch<DataProvider>();
     final menu = data.menuItems.where((item) => item.active).toList();
+    final grandTotal = _orders.fold(
+      0.0,
+      (sum, order) => sum + order.total(menu),
+    );
+    final orderCount = _orders.fold(
+      0,
+      (sum, order) => sum + order.lines.length,
+    );
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.saleId == null ? S.addSale : '${S.edit} ${S.sales}'),
+        title: Text(
+          widget.saleId == null ? S.batchSale : '${S.edit} ${S.sales}',
+        ),
       ),
       body: data.isLoading
           ? const Padding(
@@ -233,139 +290,75 @@ class _AddSaleScreenState extends State<AddSaleScreen> {
                       padding: const EdgeInsets.fromLTRB(18, 8, 18, 130),
                       children: [
                         SoftCard(
-                          child: InkWell(
-                            onTap: _pickDate,
-                            child: Row(
-                              children: [
-                                const Icon(Icons.calendar_month,
-                                    color: AppColors.primaryDark),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      const Text('Sale date',
-                                          style: TextStyle(
-                                              color: AppColors.muted,
-                                              fontSize: 12)),
-                                      Text(
-                                        Fmt.date(_date),
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.w800,
-                                          color: AppColors.ink,
-                                          fontSize: 16,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const Icon(Icons.edit, color: AppColors.muted),
-                              ],
+                          color: AppColors.blueSoft,
+                          child: const Text(
+                            'Every food item is saved as its own order with its own date, note, customer and total. Add as many foods as you need.',
+                            style: TextStyle(
+                              color: AppColors.ink,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                         ),
                         const SizedBox(height: 18),
-                        const SectionTitle(title: 'Items sold'),
-                        const SizedBox(height: 10),
-                        ...List.generate(_lines.length, (index) {
-                          return _ItemCard(
-                            editor: _lines[index],
+                        ...List.generate(_orders.length, (index) {
+                          final order = _orders[index];
+                          return _OrderCard(
+                            order: order,
                             index: index,
                             menu: menu,
-                            canRemove: _lines.length > 1,
+                            sacks: data.sacks,
+                            canRemove: _orders.length > 1,
                             onChanged: () => setState(() {}),
-                            onRemove: () => setState(() => _lines.removeAt(index)),
+                            onRemove: () {
+                              final removed = _orders.removeAt(index);
+                              removed.dispose();
+                              setState(() {});
+                            },
+                            onPickDate: () => _pickDate(index),
+                            onPickDeadline: () => _pickDeadline(index),
                           );
                         }),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 10),
                         OutlinedButton.icon(
-                          onPressed: () =>
-                              setState(() => _lines.add(_LineEditor())),
-                          icon: const Icon(Icons.add),
-                          label: const Text(S.addAnotherItem),
-                        ),
-                        const SizedBox(height: 18),
-                        SoftCard(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              TextFormField(
-                                controller: _orderNote,
-                                decoration: const InputDecoration(
-                                  labelText: 'Order note (customer or reminder)',
-                                  prefixIcon: Icon(Icons.notes),
-                                ),
-                              ),
-                              const SizedBox(height: 14),
-                              Material(
-                                color: Colors.transparent,
-                                child: SwitchListTile(
-                                  contentPadding: EdgeInsets.zero,
-                                  value: _unpaid,
-                                  onChanged: (value) =>
-                                      setState(() => _unpaid = value),
-                                  title: const Text(S.notPaidYet),
-                                  activeThumbColor: AppColors.accent,
-                                ),
-                              ),
-                              if (_unpaid) ...[
-                                TextFormField(
-                                  controller: _customer,
-                                  decoration: const InputDecoration(
-                                    labelText: S.customer,
-                                    prefixIcon: Icon(Icons.person),
-                                  ),
-                                  validator: (value) => value == null ||
-                                          value.trim().isEmpty
-                                      ? 'Please enter the customer name.'
-                                      : null,
-                                ),
-                                const SizedBox(height: 12),
-                                TextFormField(
-                                  controller: _phone,
-                                  keyboardType: TextInputType.phone,
-                                  decoration: const InputDecoration(
-                                    labelText: S.phone,
-                                    prefixIcon: Icon(Icons.phone),
-                                  ),
-                                ),
-                                const SizedBox(height: 12),
-                                InkWell(
-                                  onTap: _pickDeadline,
-                                  child: InputDecorator(
-                                    decoration: const InputDecoration(
-                                      labelText: S.deadline,
-                                      prefixIcon: Icon(Icons.event),
-                                    ),
-                                    child: Text(
-                                      _deadline == null
-                                          ? 'Optional'
-                                          : Fmt.date(_deadline!),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ],
+                          onPressed: () => setState(
+                            () => _orders.add(
+                              _OrderDraft(date: _orders.last.date),
+                            ),
                           ),
+                          icon: const Icon(Icons.add),
+                          label: const Text(S.addAnotherOrder),
                         ),
-                        const SizedBox(height: 22),
+                        const SizedBox(height: 20),
                         SoftCard(
-                          color: AppColors.blueSoft,
+                          color: AppColors.accentSoft,
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              const Text(
-                                S.orderTotal,
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w800,
-                                  color: AppColors.ink,
-                                ),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'All orders',
+                                    style: TextStyle(
+                                      fontSize: 17,
+                                      fontWeight: FontWeight.w800,
+                                      color: AppColors.ink,
+                                    ),
+                                  ),
+                                  Text(
+                                    '$orderCount order${orderCount == 1 ? '' : 's'}',
+                                    style: const TextStyle(
+                                      color: AppColors.muted,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
                               ),
                               CountUpText(
-                                value: _total(menu),
+                                value: grandTotal,
                                 style: const TextStyle(
-                                  fontSize: 23,
+                                  fontSize: 22,
                                   fontWeight: FontWeight.w900,
                                   color: AppColors.accent,
                                 ),
@@ -377,7 +370,9 @@ class _AddSaleScreenState extends State<AddSaleScreen> {
                         _saving
                             ? const Center(child: CircularProgressIndicator())
                             : PrimaryButton(
-                                label: '${S.save} ${S.sales}',
+                                label: orderCount == 1
+                                    ? '${S.save} ${S.sales}'
+                                    : 'Save $orderCount orders',
                                 onPressed: () => _save(menu, data.ingredients),
                               ),
                       ],
@@ -386,6 +381,227 @@ class _AddSaleScreenState extends State<AddSaleScreen> {
                 ),
     );
   }
+}
+
+class _OrderCard extends StatelessWidget {
+  final _OrderDraft order;
+  final int index;
+  final List<MenuItem> menu;
+  final List<Sack> sacks;
+  final bool canRemove;
+  final VoidCallback onChanged;
+  final VoidCallback onRemove;
+  final VoidCallback onPickDate;
+  final VoidCallback onPickDeadline;
+
+  const _OrderCard({
+    required this.order,
+    required this.index,
+    required this.menu,
+    required this.sacks,
+    required this.canRemove,
+    required this.onChanged,
+    required this.onRemove,
+    required this.onPickDate,
+    required this.onPickDeadline,
+  });
+
+  @override
+  Widget build(BuildContext context) => SoftCard(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    gradient: AppColors.brandGradient,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    '${S.orderNumber} ${index + 1}',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+                const Spacer(),
+                Text(
+                  Fmt.money(order.total(menu)),
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w900,
+                    color: AppColors.accent,
+                    fontSize: 16,
+                  ),
+                ),
+                if (canRemove)
+                  IconButton(
+                    tooltip: S.removeOrder,
+                    icon: const Icon(Icons.close, color: AppColors.danger),
+                    onPressed: onRemove,
+                  ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            InkWell(
+              onTap: onPickDate,
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF2F3F5),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.calendar_month,
+                        color: AppColors.primaryDark),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Sale date',
+                            style: TextStyle(
+                              color: AppColors.muted,
+                              fontSize: 12,
+                            ),
+                          ),
+                          Text(
+                            Fmt.date(order.date),
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.ink,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Icon(Icons.edit, color: AppColors.muted),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<String?>(
+              initialValue: order.sackId,
+              decoration: const InputDecoration(
+                labelText: 'Link to sack (optional)',
+                prefixIcon: Icon(Icons.inventory_2),
+              ),
+              items: [
+                const DropdownMenuItem<String?>(
+                  value: null,
+                  child: Text('No sack'),
+                ),
+                ...sacks.map(
+                  (sack) => DropdownMenuItem<String?>(
+                    value: sack.id,
+                    child: Text(
+                      '${sack.product} • ${Fmt.date(sack.boughtDate)} • ${Fmt.money(sack.cost)}',
+                    ),
+                  ),
+                ),
+              ],
+              onChanged: (value) {
+                order.sackId = value;
+                onChanged();
+              },
+            ),
+            const SizedBox(height: 16),
+            const SectionTitle(title: 'Items sold'),
+            const SizedBox(height: 10),
+            ...List.generate(order.lines.length, (itemIndex) {
+              return _ItemCard(
+                editor: order.lines[itemIndex],
+                index: itemIndex,
+                menu: menu,
+                canRemove: order.lines.length > 1,
+                onChanged: onChanged,
+                onRemove: () {
+                  final removed = order.lines.removeAt(itemIndex);
+                  removed.dispose();
+                  onChanged();
+                },
+              );
+            }),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: () {
+                order.lines.add(_LineEditor());
+                onChanged();
+              },
+              icon: const Icon(Icons.add),
+              label: const Text(S.addAnotherItem),
+            ),
+            const SizedBox(height: 14),
+            TextFormField(
+              controller: order.note,
+              decoration: const InputDecoration(
+                labelText: 'Order note (customer or reminder)',
+                prefixIcon: Icon(Icons.notes),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Material(
+              color: Colors.transparent,
+              child: SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                value: order.unpaid,
+                onChanged: (value) {
+                  order.unpaid = value;
+                  onChanged();
+                },
+                title: const Text(S.notPaidYet),
+                activeThumbColor: AppColors.accent,
+              ),
+            ),
+            if (order.unpaid) ...[
+              TextFormField(
+                controller: order.customer,
+                decoration: const InputDecoration(
+                  labelText: S.customer,
+                  prefixIcon: Icon(Icons.person),
+                ),
+                validator: (value) => value == null || value.trim().isEmpty
+                    ? 'Please enter the customer name.'
+                    : null,
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: order.phone,
+                keyboardType: TextInputType.phone,
+                decoration: const InputDecoration(
+                  labelText: S.phone,
+                  prefixIcon: Icon(Icons.phone),
+                ),
+              ),
+              const SizedBox(height: 12),
+              InkWell(
+                onTap: onPickDeadline,
+                child: InputDecorator(
+                  decoration: const InputDecoration(
+                    labelText: S.deadline,
+                    prefixIcon: Icon(Icons.event),
+                  ),
+                  child: Text(
+                    order.deadline == null
+                        ? 'Optional'
+                        : Fmt.date(order.deadline!),
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      );
 }
 
 class _ItemCard extends StatelessWidget {

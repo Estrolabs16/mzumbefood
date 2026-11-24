@@ -320,31 +320,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 icon: Icons.restaurant_menu,
                                 title: S.menu,
                                 subtitle: '${data.menuItems.length} foods saved',
-                                onTap: () => context.go('/menu'),
+                                onTap: () => context.push('/menu'),
                               ),
                               _Tile(
                                 icon: Icons.egg_outlined,
                                 title: S.ingredients,
                                 subtitle: '${data.ingredients.length} ingredients',
-                                onTap: () => context.go('/ingredients'),
+                                onTap: () => context.push('/ingredients'),
                               ),
                               _Tile(
                                 icon: Icons.kebab_dining,
                                 title: S.mishkaki,
                                 subtitle: 'Sticks and stock',
-                                onTap: () => context.go('/mishkaki'),
+                                onTap: () => context.push('/mishkaki'),
                               ),
                               _Tile(
                                 icon: Icons.inventory_2,
                                 title: S.sacks,
                                 subtitle: '${data.sacks.length} sacks',
-                                onTap: () => context.go('/sacks'),
+                                onTap: () => context.push('/sacks'),
                               ),
                               _Tile(
                                 icon: Icons.label_outline,
                                 title: S.expenseNames,
                                 subtitle: 'Quick expense entries',
-                                onTap: () => context.go('/expense-names'),
+                                onTap: () => context.push('/expense-names'),
                               ),
                               _Tile(
                                 icon: Icons.wallet,
@@ -352,13 +352,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 subtitle: profile.dailyBudget > 0
                                     ? '${Fmt.money(profile.dailyBudget)} per day'
                                     : 'Not set',
-                                onTap: () => context.go('/personal-budget'),
+                                onTap: () => context.push('/personal-budget'),
                               ),
                               _Tile(
                                 icon: Icons.payments,
                                 title: S.personalIncome,
                                 subtitle: 'Separate from business',
-                                onTap: () => context.go('/personal-income'),
+                                onTap: () => context.push('/personal-income'),
                               ),
                             ],
                           ),
@@ -423,7 +423,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                   ),
                 ),
-                const SliverToBoxAdapter(child: SizedBox(height: 120)),
               ],
             ),
     );

@@ -46,6 +46,7 @@ class _SignInScreenState extends State<SignInScreen> {
                 title: S.welcome,
                 subtitle: 'Your food business, in your pocket.',
                 showLogo: true,
+                showBack: false,
               ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(22, 26, 22, 30),

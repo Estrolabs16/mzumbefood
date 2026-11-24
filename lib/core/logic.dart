@@ -56,11 +56,15 @@ Totals totalsFor({
     revenue += item.revenue;
     cost += item.cost;
   }
+  var expenseTotal = 0.0;
   for (final payment in payments) {
     if (!_matches(payment.date, from, to)) continue;
-    revenue += payment.amount;
+    if (payment.direction == DebtDirection.iOweThem) {
+      expenseTotal += payment.amount;
+    } else {
+      revenue += payment.amount;
+    }
   }
-  var expenseTotal = 0.0;
   for (final expense in expenses) {
     if (!_matches(expense.date, from, to)) continue;
     expenseTotal += expense.amount;
@@ -71,6 +75,100 @@ Totals totalsFor({
     expenses: expenseTotal,
     orders: orders,
   );
+}
+
+class SackDay {
+  final DateTime date;
+  final double revenue;
+  final double ingredientCost;
+  final double sackCost;
+
+  const SackDay({
+    required this.date,
+    required this.revenue,
+    required this.ingredientCost,
+    required this.sackCost,
+  });
+
+  double get profit => revenue - ingredientCost - sackCost;
+}
+
+class SackStats {
+  final Sack sack;
+  final List<Sale> sales;
+  final List<SackDay> days;
+  final double revenue;
+  final double ingredientCost;
+  final double sackCost;
+
+  const SackStats({
+    required this.sack,
+    required this.sales,
+    required this.days,
+    required this.revenue,
+    required this.ingredientCost,
+    required this.sackCost,
+  });
+
+  double get profit => revenue - ingredientCost - sackCost;
+}
+
+List<SackStats> buildSackStats({
+  required Iterable<Sack> sacks,
+  required Iterable<Sale> sales,
+}) {
+  final allSales = sales.toList();
+  final stats = sacks.map((sack) {
+    final start = Fmt.startOfDay(sack.boughtDate);
+    final finish = Fmt.startOfDay(sack.finishedDate ?? DateTime.now());
+    final end = finish.add(const Duration(days: 1));
+    final span = end.difference(start).inDays < 1 ? 1 : end.difference(start).inDays;
+
+    final linked = allSales
+        .where(
+          (sale) =>
+              sale.sackId == sack.id &&
+              !sale.date.isBefore(start) &&
+              sale.date.isBefore(end),
+        )
+        .toList();
+    final attributed = linked.isNotEmpty
+        ? linked
+        : allSales
+            .where(
+              (sale) =>
+                  (sale.sackId == null || sale.sackId!.isEmpty) &&
+                  !sale.date.isBefore(start) &&
+                  sale.date.isBefore(end),
+            )
+            .toList();
+
+    final perDay = sack.cost / span;
+    final days = <SackDay>[];
+    for (var day = start; day.isBefore(end); day = day.add(const Duration(days: 1))) {
+      final daySales =
+          attributed.where((sale) => Fmt.sameDay(sale.date, day)).toList();
+      days.add(
+        SackDay(
+          date: day,
+          revenue: daySales.fold(0, (sum, sale) => sum + sale.total),
+          ingredientCost: daySales.fold(0, (sum, sale) => sum + sale.cost),
+          sackCost: perDay,
+        ),
+      );
+    }
+
+    return SackStats(
+      sack: sack,
+      sales: attributed,
+      days: days,
+      revenue: attributed.fold(0, (sum, sale) => sum + sale.total),
+      ingredientCost: attributed.fold(0, (sum, sale) => sum + sale.cost),
+      sackCost: sack.cost,
+    );
+  }).toList()
+    ..sort((a, b) => b.sack.boughtDate.compareTo(a.sack.boughtDate));
+  return stats;
 }
 
 class DayPoint {
@@ -176,6 +274,19 @@ double outstandingDebt(
   Iterable<DebtPayment> payments,
 ) =>
     debts.fold(0, (sum, debt) {
+      if (debt.paid) return sum;
+      final remaining = debt.amount - paidForDebt(debt.id, payments);
+      return sum + (remaining > 0 ? remaining : 0);
+    });
+
+double outstandingDebtFor(
+  Iterable<Debt> debts,
+  Iterable<DebtPayment> payments,
+  DebtDirection direction,
+) =>
+    debts
+        .where((debt) => debt.direction == direction)
+        .fold(0, (sum, debt) {
       if (debt.paid) return sum;
       final remaining = debt.amount - paidForDebt(debt.id, payments);
       return sum + (remaining > 0 ? remaining : 0);

@@ -1,6 +1,18 @@
 import 'package:mzumbefood/core/format.dart';
 import 'package:mzumbefood/core/serialization.dart';
 
+enum DebtDirection {
+  theyOweMe('theyOweMe'),
+  iOweThem('iOweThem');
+
+  const DebtDirection(this.value);
+
+  final String value;
+
+  static DebtDirection fromValue(String? value) =>
+      value == 'iOweThem' ? iOweThem : theyOweMe;
+}
+
 class Ingredient {
   final String id;
   final String name;
@@ -174,6 +186,8 @@ class Sale {
   final String note;
   final bool paid;
   final DateTime createdAt;
+  final DateTime? updatedAt;
+  final String? sackId;
 
   const Sale({
     required this.id,
@@ -185,6 +199,8 @@ class Sale {
     required this.note,
     required this.paid,
     required this.createdAt,
+    this.updatedAt,
+    this.sackId,
   });
 
   factory Sale.create({
@@ -193,6 +209,7 @@ class Sale {
     required List<SaleLine> items,
     required String note,
     required bool paid,
+    String? sackId,
   }) =>
       Sale(
         id: id,
@@ -204,11 +221,21 @@ class Sale {
         note: note,
         paid: paid,
         createdAt: DateTime.now(),
+        sackId: sackId,
       );
 
   String get itemSummary => items
       .map((item) => '${Fmt.number(item.qty)}x ${item.name}')
       .join(', ');
+
+  String get displayLines => items
+      .map(
+        (item) =>
+            '${Fmt.number(item.qty)}x ${item.name} • ${Fmt.money(item.unitPrice)}',
+      )
+      .join('\n');
+
+  double get profit => total - cost;
 
   Map<String, dynamic> toMap() => {
         'date': date,
@@ -219,6 +246,8 @@ class Sale {
         'note': note,
         'paid': paid,
         'createdAt': createdAt,
+        'updatedAt': updatedAt,
+        'sackId': sackId,
       };
 
   factory Sale.fromMap(String id, Map<String, dynamic> map) {
@@ -239,6 +268,8 @@ class Sale {
       note: asString(map['note']),
       paid: asBool(map['paid'], true),
       createdAt: asDate(map['createdAt'], date),
+      updatedAt: asOptionalDate(map['updatedAt']),
+      sackId: map['sackId'] == null ? null : asString(map['sackId']),
     );
   }
 }
@@ -432,15 +463,24 @@ class Sack {
 
   double get costPerDay => cost / daysLasted;
 
-  Sack copyWith({DateTime? finishedDate}) => Sack(
-        id: id,
-        product: product,
-        boughtDate: boughtDate,
-        dayKey: dayKey,
-        cost: cost,
-        finishedDate: finishedDate ?? this.finishedDate,
-        note: note,
-      );
+  Sack copyWith({
+    String? product,
+    DateTime? boughtDate,
+    double? cost,
+    DateTime? finishedDate,
+    String? note,
+  }) {
+    final purchaseDate = boughtDate ?? this.boughtDate;
+    return Sack(
+      id: id,
+      product: product ?? this.product,
+      boughtDate: purchaseDate,
+      dayKey: Fmt.dayKey(purchaseDate),
+      cost: cost ?? this.cost,
+      finishedDate: finishedDate ?? this.finishedDate,
+      note: note ?? this.note,
+    );
+  }
 
   Map<String, dynamic> toMap() => {
         'product': product,
@@ -473,6 +513,7 @@ class DebtPayment {
   final DateTime date;
   final String dayKey;
   final String note;
+  final DebtDirection direction;
 
   const DebtPayment({
     required this.id,
@@ -482,6 +523,7 @@ class DebtPayment {
     required this.date,
     required this.dayKey,
     required this.note,
+    this.direction = DebtDirection.theyOweMe,
   });
 
   Map<String, dynamic> toMap() => {
@@ -491,6 +533,7 @@ class DebtPayment {
         'date': date,
         'dayKey': dayKey,
         'note': note,
+        'direction': direction.value,
       };
 
   factory DebtPayment.fromMap(String id, Map<String, dynamic> map) {
@@ -503,6 +546,7 @@ class DebtPayment {
       date: date,
       dayKey: asString(map['dayKey'], Fmt.dayKey(date)),
       note: asString(map['note']),
+      direction: DebtDirection.fromValue(asString(map['direction'])),
     );
   }
 }
@@ -517,6 +561,7 @@ class Debt {
   final String dayKey;
   final DateTime? deadline;
   final bool paid;
+  final DebtDirection direction;
 
   const Debt({
     required this.id,
@@ -528,6 +573,7 @@ class Debt {
     required this.dayKey,
     required this.deadline,
     required this.paid,
+    this.direction = DebtDirection.theyOweMe,
   });
 
   bool isOverdue(DateTime now, double paidAmount) =>
@@ -536,7 +582,7 @@ class Debt {
       deadline != null &&
       deadline!.isBefore(now);
 
-  Debt copyWith({bool? paid}) => Debt(
+  Debt copyWith({bool? paid, DebtDirection? direction}) => Debt(
         id: id,
         customer: customer,
         phone: phone,
@@ -546,6 +592,7 @@ class Debt {
         dayKey: dayKey,
         deadline: deadline,
         paid: paid ?? this.paid,
+        direction: direction ?? this.direction,
       );
 
   Map<String, dynamic> toMap() => {
@@ -557,6 +604,7 @@ class Debt {
         'dayKey': dayKey,
         'deadline': deadline,
         'paid': paid,
+        'direction': direction.value,
       };
 
   factory Debt.fromMap(String id, Map<String, dynamic> map) {
@@ -571,6 +619,7 @@ class Debt {
       dayKey: asString(map['dayKey'], Fmt.dayKey(date)),
       deadline: asOptionalDate(map['deadline']),
       paid: asBool(map['paid']),
+      direction: DebtDirection.fromValue(asString(map['direction'])),
     );
   }
 }

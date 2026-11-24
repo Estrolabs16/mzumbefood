@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:mzumbefood/core/theme.dart';
 import 'package:provider/provider.dart';
 import 'package:mzumbefood/core/format.dart';
@@ -11,8 +12,9 @@ import 'package:mzumbefood/widgets/common.dart';
 
 class AddExpenseScreen extends StatefulWidget {
   final String? expenseId;
+  final String? initialDate;
 
-  const AddExpenseScreen({super.key, this.expenseId});
+  const AddExpenseScreen({super.key, this.expenseId, this.initialDate});
 
   @override
   State<AddExpenseScreen> createState() => _AddExpenseScreenState();
@@ -29,6 +31,9 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
   @override
   void initState() {
     super.initState();
+    if (widget.initialDate != null) {
+      _date = Fmt.parseDayKey(widget.initialDate!);
+    }
     final data = context.read<DataProvider>();
     final existing = data.expenses
         .where((element) => element.id == widget.expenseId)
@@ -78,7 +83,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
       await context.read<DataStore>().saveExpense(expense);
       if (mounted) {
         showSuccess(context);
-        Navigator.of(context).pop();
+        context.go('/home');
       }
     } catch (error) {
       if (mounted) {

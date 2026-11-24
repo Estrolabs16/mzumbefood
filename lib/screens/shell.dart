@@ -58,7 +58,7 @@ class _AppShellState extends State<AppShell> {
 
   void _navigate(String path) {
     setState(() => _expanded = false);
-    context.go(path);
+    context.push(path);
   }
 
   void _selectTab(int index) {
@@ -69,6 +69,8 @@ class _AppShellState extends State<AppShell> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      extendBody: true,
+      backgroundColor: AppColors.surface,
       body: widget.child,
       floatingActionButton: Stack(
         alignment: Alignment.bottomRight,
@@ -93,16 +95,13 @@ class _AppShellState extends State<AppShell> {
               onTap: () => _navigate('/add-sale'),
             ),
           ],
-          Padding(
-            padding: const EdgeInsets.only(bottom: 96),
-            child: FloatingActionButton(
-              heroTag: 'main-add',
-              onPressed: () => setState(() => _expanded = !_expanded),
-              child: AnimatedRotation(
-                turns: _expanded ? 0.125 : 0,
-                duration: const Duration(milliseconds: 220),
-                child: const Icon(Icons.add, size: 30),
-              ),
+          FloatingActionButton(
+            heroTag: 'main-add',
+            onPressed: () => setState(() => _expanded = !_expanded),
+            child: AnimatedRotation(
+              turns: _expanded ? 0.125 : 0,
+              duration: const Duration(milliseconds: 220),
+              child: const Icon(Icons.add, size: 30),
             ),
           ),
         ],
@@ -140,6 +139,14 @@ class _FloatingBottomBarState extends State<_FloatingBottomBar>
   );
 
   @override
+  void didUpdateWidget(covariant _FloatingBottomBar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.currentIndex != widget.currentIndex && mounted) {
+      _bounce.forward(from: 0);
+    }
+  }
+
+  @override
   void dispose() {
     _bounce.dispose();
     super.dispose();
@@ -165,11 +172,12 @@ class _FloatingBottomBarState extends State<_FloatingBottomBar>
           child: Container(
             height: 70,
             decoration: BoxDecoration(
-              gradient: AppColors.brandGradient,
-              borderRadius: BorderRadius.circular(35),
-              border: const Border.fromBorderSide(
-                BorderSide(color: Color(0x4DFFFFFF), width: 1),
+              gradient: const LinearGradient(
+                colors: [Color(0xFF7DC9E8), Color(0xFF4A9FC8)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
               ),
+              borderRadius: BorderRadius.circular(35),
               boxShadow: const [
                 BoxShadow(
                   color: Color(0x1A000000),
@@ -182,6 +190,10 @@ class _FloatingBottomBarState extends State<_FloatingBottomBar>
                   spreadRadius: -5,
                 ),
               ],
+              border: Border.all(
+                color: const Color(0x4DFFFFFF),
+                width: 1,
+              ),
             ),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(35),
@@ -205,7 +217,7 @@ class _FloatingBottomBarState extends State<_FloatingBottomBar>
           ),
         ),
       ),
-    );
+    ).animate().fadeIn(duration: 360.ms).slideY(begin: 0.3, duration: 360.ms);
   }
 }
 

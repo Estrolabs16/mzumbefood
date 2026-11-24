@@ -65,7 +65,7 @@ class _HomeScreenState extends State<HomeScreen> {
       body: RefreshIndicator(
         onRefresh: () async => data.retry(),
         child: ListView(
-          padding: const EdgeInsets.only(bottom: 130),
+          padding: EdgeInsets.zero,
           children: [
             GradientHeader(
               title: S.home,
@@ -143,6 +143,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       value: totals.orders.toDouble(),
                       icon: Icons.shopping_bag,
                       color: AppColors.primary,
+                      monetary: false,
                     ).animate().fadeIn(delay: 120.ms, duration: 260.ms),
                   ],
                 ),
@@ -232,14 +233,37 @@ class _HomeScreenState extends State<HomeScreen> {
                       child: PrimaryButton(
                         label: S.addSale,
                         icon: Icons.add_shopping_cart,
-                        onPressed: () => context.push('/add-sale'),
+                        onPressed: () => context.push(
+                          '/add-sale?date=${Fmt.dayKey(_selected)}',
+                        ),
                       ),
                     ),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: 8),
                     Expanded(
                       child: OutlinedButton(
-                        onPressed: () => context.push('/add-expense'),
+                        onPressed: () => context.push(
+                          '/add-expense?date=${Fmt.dayKey(_selected)}',
+                        ),
                         child: const Text(S.addExpense),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    PressScale(
+                      onTap: () => context.push(
+                        '/add-sale?date=${Fmt.dayKey(_selected)}',
+                      ),
+                      child: Container(
+                        width: 52,
+                        height: 56,
+                        decoration: BoxDecoration(
+                          gradient: AppColors.brandGradient,
+                          borderRadius: BorderRadius.circular(18),
+                        ),
+                        child: const Icon(
+                          Icons.playlist_add,
+                          color: Colors.white,
+                          size: 24,
+                        ),
                       ),
                     ),
                   ],
@@ -270,9 +294,17 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       )
                     : Column(
-                        children: daySales.take(6).map((sale) {
+                        children: daySales.map((sale) {
                           final index = daySales.indexOf(sale);
-                          return _SaleRow(sale: sale)
+                          final sack = sale.sackId == null
+                              ? null
+                              : data.sacks
+                                  .where((item) => item.id == sale.sackId)
+                                  .firstOrNull;
+                          return _SaleRow(
+                            sale: sale,
+                            sackLabel: sack?.product,
+                          )
                               .animate()
                               .fadeIn(delay: Duration(milliseconds: index * 45))
                               .slideX(begin: 0.05, duration: 240.ms);
@@ -373,27 +405,26 @@ class _WeekValue extends StatelessWidget {
 
 class _SaleRow extends StatelessWidget {
   final Sale sale;
+  final String? sackLabel;
 
-  const _SaleRow({required this.sale});
+  const _SaleRow({required this.sale, this.sackLabel});
 
   @override
   Widget build(BuildContext context) => SoftCard(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         onTap: () => context.push('/add-sale?id=${sale.id}'),
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Hero(
-              tag: 'sale-${sale.id}',
-              child: Container(
-                width: 44,
-                height: 44,
-                decoration: const BoxDecoration(
-                  color: AppColors.blueSoft,
-                  borderRadius: BorderRadius.all(Radius.circular(14)),
-                ),
-                alignment: Alignment.center,
-                child: const Text('🍽️', style: TextStyle(fontSize: 24)),
+            Container(
+              width: 44,
+              height: 44,
+              decoration: const BoxDecoration(
+                gradient: AppColors.brandGradient,
+                borderRadius: BorderRadius.all(Radius.circular(14)),
               ),
+              alignment: Alignment.center,
+              child: const Text('🍽️', style: TextStyle(fontSize: 23)),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -401,34 +432,72 @@ class _SaleRow extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    sale.itemSummary,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                    sale.displayLines,
+                    maxLines: 3,
                     style: const TextStyle(
                       fontWeight: FontWeight.w800,
                       color: AppColors.ink,
+                      height: 1.25,
                     ),
                   ),
-                  Text(
-                    '${Fmt.date(sale.date)}${sale.note.isEmpty ? '' : ' • ${sale.note}'}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: AppColors.muted,
-                      fontSize: 12,
-                    ),
+                  const SizedBox(height: 5),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 4,
+                    children: [
+                      _SaleChip(
+                        icon: Icons.schedule,
+                        label: Fmt.time(sale.createdAt),
+                        color: AppColors.primaryDark,
+                      ),
+                      if (sackLabel != null)
+                        _SaleChip(
+                          icon: Icons.inventory_2,
+                          label: sackLabel!,
+                          color: AppColors.accent,
+                        ),
+                    ],
                   ),
+                  if (sale.note.isNotEmpty) ...[
+                    const SizedBox(height: 5),
+                    Text(
+                      sale.note,
+                      maxLines: 2,
+                      style: const TextStyle(
+                        color: AppColors.muted,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
-            Text(
-              Fmt.money(sale.total),
-              style: const TextStyle(
-                fontWeight: FontWeight.w900,
-                color: AppColors.primaryDark,
-              ),
+            const SizedBox(width: 8),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  Fmt.money(sale.total),
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w900,
+                    color: AppColors.primaryDark,
+                    fontSize: 15,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '+${Fmt.money(sale.profit)}',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.success,
+                    fontSize: 11,
+                  ),
+                ),
+              ],
             ),
             IconButton(
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
               icon: const Icon(Icons.delete_outline, color: AppColors.danger),
               onPressed: () async {
                 final confirm = await confirmAction(
@@ -440,6 +509,42 @@ class _SaleRow extends StatelessWidget {
                   await context.read<DataStore>().deleteSale(sale.id);
                 }
               },
+            ),
+          ],
+        ),
+      );
+}
+
+class _SaleChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+
+  const _SaleChip({
+    required this.icon,
+    required this.label,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 12, color: color),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: TextStyle(
+                color: color,
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ],
         ),

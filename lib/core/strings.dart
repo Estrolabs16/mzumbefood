@@ -58,6 +58,11 @@ abstract final class S {
   static const markPaid = 'Mark as paid';
   static const partialPayment = 'Record payment';
   static const customer = 'Customer name';
+  static const personName = 'Person name';
+  static const theyOweMe = 'They owe me';
+  static const iOweThem = 'I owe them';
+  static const theyOweYou = 'They owe you';
+  static const youOwe = 'You owe';
   static const phone = 'Phone (optional)';
   static const deadline = 'Deadline';
   static const notPaidYet = 'Not paid yet (create debt)';
@@ -76,7 +81,12 @@ abstract final class S {
   static const quantity = 'Quantity';
   static const unitPrice = 'Price per unit (TSh)';
   static const note = 'Note (optional)';
-  static const addAnotherItem = 'Add another item';
+  static const addAnotherItem = 'Add another food';
+  static const batchSale = 'Batch add orders';
+  static const addAnotherOrder = 'Add another order';
+  static const removeOrder = 'Remove order';
+  static const orderNumber = 'Order';
+  static const sackPrice = 'Sack price (TSh)';
   static const orderTotal = 'Order total';
   static const ingredientCost = 'Ingredient cost';
   static const netProfit = 'Net profit';

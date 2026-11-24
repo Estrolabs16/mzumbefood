@@ -111,6 +111,19 @@ class _HistoryScreenState extends State<HistoryScreen> {
                             prefixIcon: Icon(Icons.search),
                           ),
                         ),
+                        if (_selectedDay != null) ...[
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: TextButton.icon(
+                              onPressed: () => context.push(
+                                '/add-sale?date=${Fmt.dayKey(_selectedDay!)}',
+                              ),
+                              icon: const Icon(Icons.add_shopping_cart),
+                              label: const Text('Add sale for this day'),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                        ],
                         const SizedBox(height: 12),
                         SingleChildScrollView(
                           scrollDirection: Axis.horizontal,
@@ -248,7 +261,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
                       childCount: keys.length,
                     ),
                   ),
-                const SliverToBoxAdapter(child: SizedBox(height: 130)),
               ],
             ),
     );
@@ -262,7 +274,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
           date: sale.date,
           type: 'sale',
           title: sale.itemSummary,
-          subtitle: sale.note.isEmpty ? S.sales : sale.note,
+          subtitle:
+              '${sale.note.isEmpty ? S.sales : sale.note} • ${Fmt.dateTime(sale.createdAt)}',
           amount: sale.total,
           color: AppColors.primaryDark,
           icon: Icons.shopping_bag,
@@ -276,7 +289,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
           date: expense.date,
           type: 'expense',
           title: expense.name,
-          subtitle: expense.note.isEmpty ? S.expenses : expense.note,
+          subtitle:
+              '${expense.note.isEmpty ? S.expenses : expense.note} • ${Fmt.dateTime(expense.date)}',
           amount: expense.amount,
           color: AppColors.accent,
           icon: Icons.receipt_long,
@@ -291,7 +305,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
             date: payment.date,
             type: 'payment',
             title: S.debtPayments,
-            subtitle: payment.customer,
+            subtitle:
+                '${payment.customer}${payment.note.isEmpty ? '' : ' • ${payment.note}'} • ${Fmt.dateTime(payment.date)}',
             amount: payment.amount,
             color: AppColors.success,
             icon: Icons.payments,
@@ -307,7 +322,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
             date: item.date,
             type: 'mishkaki',
             title: item.type,
-            subtitle: '${Fmt.number(item.sticksSold)} sticks',
+            subtitle:
+                '${Fmt.number(item.sticksSold)} sticks${item.note.isEmpty ? '' : ' • ${item.note}'} • ${Fmt.dateTime(item.date)}',
             amount: item.revenue,
             color: AppColors.primary,
             icon: Icons.kebab_dining,
@@ -423,8 +439,18 @@ class _Calendar extends StatelessWidget {
             height: 42,
             margin: const EdgeInsets.all(2),
             decoration: BoxDecoration(
-              color: selected ? AppColors.accent : Colors.transparent,
+              color: selected ? null : Colors.transparent,
+              gradient: selected ? AppColors.brandGradient : null,
               borderRadius: BorderRadius.circular(12),
+              boxShadow: selected
+                  ? const [
+                      BoxShadow(
+                        color: Color(0x334A9FC8),
+                        blurRadius: 10,
+                        offset: Offset(0, 4),
+                      ),
+                    ]
+                  : null,
             ),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -440,9 +466,17 @@ class _Calendar extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     if (hasSale)
-                      const Icon(Icons.circle, size: 6, color: AppColors.primaryDark),
+                      Icon(
+                        Icons.circle,
+                        size: 6,
+                        color: selected ? Colors.white : AppColors.primaryDark,
+                      ),
                     if (hasExpense)
-                      const Icon(Icons.circle, size: 6, color: AppColors.accent),
+                      Icon(
+                        Icons.circle,
+                        size: 6,
+                        color: AppColors.accent,
+                      ),
                   ],
                 ),
               ],
@@ -601,7 +635,7 @@ class _RecordTile extends StatelessWidget {
                   ),
                   Text(
                     record.subtitle,
-                    maxLines: 1,
+                    maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       color: AppColors.muted,
@@ -611,12 +645,27 @@ class _RecordTile extends StatelessWidget {
                 ],
               ),
             ),
-            Text(
-              Fmt.money(record.amount),
-              style: TextStyle(
-                fontWeight: FontWeight.w900,
-                color: record.color,
-              ),
+            const SizedBox(width: 6),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  Fmt.money(record.amount),
+                  style: TextStyle(
+                    fontWeight: FontWeight.w900,
+                    color: record.color,
+                    fontSize: 13,
+                  ),
+                ),
+                if (record.sale != null ||
+                    record.expense != null ||
+                    record.mishkaki != null)
+                  const Icon(
+                    Icons.edit_outlined,
+                    size: 16,
+                    color: AppColors.muted,
+                  ),
+              ],
             ),
           ],
         ),

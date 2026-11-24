@@ -95,6 +95,7 @@ GoRouter buildRouter(AuthProvider auth) {
         path: '/add-expense',
         builder: (context, state) => AddExpenseScreen(
           expenseId: state.uri.queryParameters['id'],
+          initialDate: state.uri.queryParameters['date'],
         ),
       ),
       GoRoute(path: '/menu', builder: (context, state) => const MenuScreen()),

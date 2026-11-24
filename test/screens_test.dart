@@ -74,7 +74,8 @@ void main() {
   testWidgets('add sale screen renders menu items', (tester) async {
     await pumpScreen(tester, const AddSaleScreen(), seed: seedBasics);
     expect(find.byType(AddSaleScreen), findsOneWidget);
-    expect(find.text(S.addSale), findsWidgets);
+    expect(find.text(S.batchSale), findsWidgets);
+    expect(find.text(S.addAnotherOrder), findsOneWidget);
   });
 
   testWidgets('add expense screen renders', (tester) async {
@@ -108,6 +109,7 @@ void main() {
     await pumpScreen(tester, const DebtsScreen(), seed: seedBasics);
     expect(find.text('Amina'), findsWidgets);
     expect(find.text(S.unpaid), findsOneWidget);
+    expect(find.text(S.iOweThem), findsOneWidget);
   });
 
   testWidgets('analytics renders charts', (tester) async {

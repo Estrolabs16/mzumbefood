@@ -62,3 +62,7 @@ node_modules/
 **/GoogleService-Info.plist
 **/*firebase-adminsdk*.json
 **/*service-account*.json
+
+# Release binaries
+/*.apk
+/*.ipa

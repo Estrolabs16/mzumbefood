@@ -4,6 +4,8 @@ abstract final class Fmt {
   static final NumberFormat _number = NumberFormat.decimalPattern('en_US');
   static final DateFormat _longDate = DateFormat('d MMMM y', 'en_US');
   static final DateFormat _shortDate = DateFormat('d MMM', 'en_US');
+  static final DateFormat _time = DateFormat('h:mm a', 'en_US');
+  static final DateFormat _dateTime = DateFormat('d MMM y, h:mm a', 'en_US');
 
   static String money(num value) => 'TSh ${_number.format(value.round())}';
 
@@ -14,6 +16,10 @@ abstract final class Fmt {
   static String date(DateTime value) => _longDate.format(value);
 
   static String shortDate(DateTime value) => _shortDate.format(value);
+
+  static String time(DateTime value) => _time.format(value);
+
+  static String dateTime(DateTime value) => _dateTime.format(value);
 
   static String dayKey(DateTime value) =>
       '${value.year.toString().padLeft(4, '0')}-'

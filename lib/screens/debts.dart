@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:mzumbefood/core/theme.dart';
 import 'package:provider/provider.dart';
 import 'package:mzumbefood/core/format.dart';
@@ -19,13 +20,14 @@ class DebtsScreen extends StatefulWidget {
 
 class _DebtsScreenState extends State<DebtsScreen> {
   int _tab = 0;
+  DebtDirection _direction = DebtDirection.theyOweMe;
 
   Future<void> _openAdd() async {
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => const _DebtEditor(),
+      builder: (context) => _DebtEditor(initialDirection: _direction),
     );
   }
 
@@ -41,11 +43,23 @@ class _DebtsScreenState extends State<DebtsScreen> {
   @override
   Widget build(BuildContext context) {
     final data = context.watch<DataProvider>();
-    final outstanding = outstandingDebt(data.debts, data.debtPayments);
+    final theyOwe = outstandingDebtFor(
+      data.debts,
+      data.debtPayments,
+      DebtDirection.theyOweMe,
+    );
+    final iOwe = outstandingDebtFor(
+      data.debts,
+      data.debtPayments,
+      DebtDirection.iOweThem,
+    );
     final now = DateTime.now();
-    final unpaid = data.debts.where((debt) => !debt.paid).toList()
+    final matching = data.debts
+        .where((debt) => debt.direction == _direction)
+        .toList();
+    final unpaid = matching.where((debt) => !debt.paid).toList()
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
-    final paid = data.debts.where((debt) => debt.paid).toList()
+    final paid = matching.where((debt) => debt.paid).toList()
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
     final list = _tab == 0 ? unpaid : paid;
 
@@ -57,27 +71,71 @@ class _DebtsScreenState extends State<DebtsScreen> {
                 SliverToBoxAdapter(
                   child: GradientHeader(
                     title: S.debts,
-                    subtitle: 'Track who still owes you',
+                    subtitle: _direction == DebtDirection.theyOweMe
+                        ? 'Track who still owes you'
+                        : 'Track what you still owe',
                     child: SoftCard(
                       color: AppColors.accentSoft,
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
-                            'Total outstanding',
-                            style: TextStyle(
-                              color: AppColors.ink,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          CountUpText(
-                            value: outstanding,
-                            style: const TextStyle(
-                              fontSize: 28,
-                              fontWeight: FontWeight.w900,
-                              color: AppColors.accent,
-                            ),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      S.theyOweYou,
+                                      style: const TextStyle(
+                                        color: AppColors.ink,
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    CountUpText(
+                                      value: theyOwe,
+                                      style: const TextStyle(
+                                        fontSize: 21,
+                                        fontWeight: FontWeight.w900,
+                                        color: AppColors.accent,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Container(
+                                width: 1,
+                                height: 42,
+                                color: AppColors.line,
+                              ),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      S.youOwe,
+                                      style: const TextStyle(
+                                        color: AppColors.ink,
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    CountUpText(
+                                      value: iOwe,
+                                      style: const TextStyle(
+                                        fontSize: 21,
+                                        fontWeight: FontWeight.w900,
+                                        color: AppColors.danger,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
                           ),
                           const SizedBox(height: 14),
                           PrimaryButton(
@@ -87,12 +145,43 @@ class _DebtsScreenState extends State<DebtsScreen> {
                           ),
                         ],
                       ),
-                    ),
+                    )
+                        .animate()
+                        .fadeIn(duration: 320.ms)
+                        .slideY(begin: 0.04, duration: 320.ms),
                   ),
                 ),
                 SliverToBoxAdapter(
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(18, 18, 18, 0),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: ChoiceChip(
+                            label: Text(S.theyOweMe),
+                            selected: _direction == DebtDirection.theyOweMe,
+                            onSelected: (_) => setState(
+                              () => _direction = DebtDirection.theyOweMe,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: ChoiceChip(
+                            label: Text(S.iOweThem),
+                            selected: _direction == DebtDirection.iOweThem,
+                            onSelected: (_) => setState(
+                              () => _direction = DebtDirection.iOweThem,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ).animate().fadeIn(duration: 260.ms).slideY(begin: 0.04),
+                  ),
+                ),
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(18, 10, 18, 0),
                     child: Row(
                       children: [
                         Expanded(
@@ -111,7 +200,7 @@ class _DebtsScreenState extends State<DebtsScreen> {
                           ),
                         ),
                       ],
-                    ),
+                    ).animate().fadeIn(duration: 260.ms).slideY(begin: 0.04),
                   ),
                 ),
                 if (list.isEmpty)
@@ -119,11 +208,19 @@ class _DebtsScreenState extends State<DebtsScreen> {
                     hasScrollBody: false,
                     child: EmptyState(
                       icon: _tab == 0 ? Icons.volunteer_activism : Icons.check_circle,
-                      title: _tab == 0 ? 'No unpaid debts' : 'No paid debts yet',
-                      message: _tab == 0 ? S.noDebts : 'Paid debts will appear here.',
+                      title: _tab == 0
+                          ? (_direction == DebtDirection.theyOweMe
+                              ? 'No one owes you'
+                              : 'You owe nothing')
+                          : 'No paid debts yet',
+                      message: _tab == 0
+                          ? (_direction == DebtDirection.theyOweMe
+                              ? S.noDebts
+                              : 'You have no outstanding payments to make.')
+                          : 'Paid debts will appear here.',
                       actionLabel: _tab == 0 ? 'Add debt' : null,
                       onAction: _tab == 0 ? _openAdd : null,
-                    ),
+                    ).animate().fadeIn(duration: 300.ms),
                   )
                 else
                   SliverList(
@@ -138,6 +235,7 @@ class _DebtsScreenState extends State<DebtsScreen> {
                           child: SoftCard(
                             padding: const EdgeInsets.all(16),
                             child: Column(
+                              key: ValueKey(debt.id),
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Row(
@@ -179,6 +277,21 @@ class _DebtsScreenState extends State<DebtsScreen> {
                                             style: const TextStyle(
                                               color: AppColors.muted,
                                               fontSize: 12,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 3),
+                                          Text(
+                                            debt.direction ==
+                                                    DebtDirection.theyOweMe
+                                                ? S.theyOweMe
+                                                : S.iOweThem,
+                                            style: TextStyle(
+                                              color: debt.direction ==
+                                                      DebtDirection.theyOweMe
+                                                  ? AppColors.primaryDark
+                                                  : AppColors.danger,
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.w800,
                                             ),
                                           ),
                                         ],
@@ -249,8 +362,10 @@ class _DebtsScreenState extends State<DebtsScreen> {
                                             final confirm = await confirmAction(
                                               context,
                                               title: S.markPaid,
-                                              message:
-                                                  'Mark ${debt.customer}\'s debt as paid?',
+                                              message: debt.direction ==
+                                                      DebtDirection.theyOweMe
+                                                  ? 'Mark ${debt.customer}\'s debt as paid?'
+                                                  : 'Mark your debt to ${debt.customer} as paid?',
                                             );
                                             if (!confirm || remaining <= 0) return;
                                             await store.recordDebtPayment(
@@ -263,6 +378,7 @@ class _DebtsScreenState extends State<DebtsScreen> {
                                                     date: DateTime.now(),
                                                     dayKey: Fmt.dayKey(DateTime.now()),
                                                     note: 'Marked as paid',
+                                                    direction: debt.direction,
                                                   ),
                                                 );
                                           },
@@ -282,11 +398,17 @@ class _DebtsScreenState extends State<DebtsScreen> {
                                       ),
                                     ),
                                   ),
-                              ],
-                            ),
-                          ),
-                        );
-                      },
+                               ],
+                             ),
+                           )
+                               .animate()
+                               .fadeIn(
+                                 delay: (index % 6 * 30).ms,
+                                 duration: 280.ms,
+                               )
+                               .slideY(begin: 0.03, duration: 280.ms),
+                         );
+                       },
                       childCount: list.length,
                     ),
                   ),
@@ -334,7 +456,9 @@ Widget _sheet({
     );
 
 class _DebtEditor extends StatefulWidget {
-  const _DebtEditor();
+  final DebtDirection initialDirection;
+
+  const _DebtEditor({required this.initialDirection});
 
   @override
   State<_DebtEditor> createState() => _DebtEditorState();
@@ -346,6 +470,7 @@ class _DebtEditorState extends State<_DebtEditor> {
   final _amount = TextEditingController();
   final _reason = TextEditingController();
   final _phone = TextEditingController();
+  late DebtDirection _direction = widget.initialDirection;
   DateTime? _deadline;
   bool _saving = false;
 
@@ -372,6 +497,7 @@ class _DebtEditorState extends State<_DebtEditor> {
       dayKey: Fmt.dayKey(now),
       deadline: _deadline,
       paid: false,
+      direction: _direction,
     );
     await context.read<DataStore>().saveDebt(debt);
     if (mounted) {
@@ -388,9 +514,35 @@ class _DebtEditorState extends State<_DebtEditor> {
           key: _formKey,
           child: Column(
             children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: ChoiceChip(
+                      label: Text(S.theyOweMe),
+                      selected: _direction == DebtDirection.theyOweMe,
+                      onSelected: (_) =>
+                          setState(() => _direction = DebtDirection.theyOweMe),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: ChoiceChip(
+                      label: Text(S.iOweThem),
+                      selected: _direction == DebtDirection.iOweThem,
+                      onSelected: (_) =>
+                          setState(() => _direction = DebtDirection.iOweThem),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
               TextFormField(
                 controller: _customer,
-                decoration: const InputDecoration(labelText: S.customer),
+                decoration: InputDecoration(
+                  labelText: _direction == DebtDirection.theyOweMe
+                      ? S.customer
+                      : S.personName,
+                ),
                 validator: (value) => value == null || value.trim().isEmpty
                     ? 'Enter a customer name.'
                     : null,
@@ -480,6 +632,7 @@ class _PaymentEditorState extends State<_PaymentEditor> {
             date: _date,
             dayKey: Fmt.dayKey(_date),
             note: _note.text.trim(),
+            direction: widget.debt.direction,
           ),
         );
     if (mounted) {

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:go_router/go_router.dart';
 import 'package:mzumbefood/core/format.dart';
 import 'package:mzumbefood/core/strings.dart';
 import 'package:mzumbefood/core/theme.dart';
@@ -10,6 +11,7 @@ class GradientHeader extends StatelessWidget {
   final List<Widget>? actions;
   final Widget? child;
   final bool showLogo;
+  final bool showBack;
 
   const GradientHeader({
     super.key,
@@ -18,6 +20,7 @@ class GradientHeader extends StatelessWidget {
     this.actions,
     this.child,
     this.showLogo = false,
+    this.showBack = true,
   });
 
   @override
@@ -25,20 +28,23 @@ class GradientHeader extends StatelessWidget {
     return Container(
       width: double.infinity,
       decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [AppColors.blueSoft, AppColors.background],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+        color: Colors.white,
         borderRadius: BorderRadius.only(
-          bottomLeft: Radius.circular(30),
-          bottomRight: Radius.circular(30),
+          bottomLeft: Radius.circular(28),
+          bottomRight: Radius.circular(28),
         ),
+        boxShadow: [
+          BoxShadow(
+            color: Color(0x14000000),
+            blurRadius: 12,
+            offset: Offset(0, 3),
+          ),
+        ],
       ),
       padding: EdgeInsets.fromLTRB(
-        20,
-        MediaQuery.of(context).padding.top + 18,
-        20,
+        18,
+        MediaQuery.of(context).padding.top + 14,
+        18,
         22,
       ),
       child: Column(
@@ -46,13 +52,15 @@ class GradientHeader extends StatelessWidget {
         children: [
           Row(
             children: [
+              if (showBack) const _HeaderBackButton(),
+              if (showBack) const SizedBox(width: 8),
               if (showLogo)
                 Image.asset(
                   'assets/logow.png',
-                  width: 46,
-                  height: 46,
+                  width: 44,
+                  height: 44,
                 ).animate().fadeIn(duration: 300.ms).scale(),
-              if (showLogo) const SizedBox(width: 12),
+              if (showLogo) const SizedBox(width: 10),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -62,6 +70,7 @@ class GradientHeader extends StatelessWidget {
                       style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                             fontWeight: FontWeight.w900,
                             color: AppColors.ink,
+                            fontSize: 23,
                           ),
                     ),
                     if (subtitle != null)
@@ -74,14 +83,96 @@ class GradientHeader extends StatelessWidget {
                   ],
                 ),
               ),
-              ...?actions,
+              ...?actions?.map(
+                (action) => Padding(
+                  padding: const EdgeInsets.only(left: 8),
+                  child: _HeaderActionPill(action: action),
+                ),
+              ),
             ],
           ),
-          if (child != null) ...[const SizedBox(height: 18), child!],
+          Container(
+            margin: const EdgeInsets.only(top: 12),
+            width: 42,
+            height: 4,
+            decoration: const BoxDecoration(
+              gradient: AppColors.accentGradient,
+              borderRadius: BorderRadius.all(Radius.circular(8)),
+            ),
+          ),
+          if (child != null) ...[const SizedBox(height: 16), child!],
         ],
       ),
     );
   }
+}
+
+class _HeaderBackButton extends StatelessWidget {
+  const _HeaderBackButton();
+
+  @override
+  Widget build(BuildContext context) => Container(
+        width: 42,
+        height: 42,
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.86),
+          shape: BoxShape.circle,
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x12000000),
+              blurRadius: 10,
+              offset: Offset(0, 3),
+            ),
+          ],
+        ),
+        child: IconButton(
+          tooltip: 'Back',
+          icon: const Icon(
+            Icons.arrow_back_ios_new_rounded,
+            color: AppColors.primaryDark,
+            size: 19,
+          ),
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/home');
+            }
+          },
+        ),
+      );
+}
+
+class _HeaderActionPill extends StatelessWidget {
+  final Widget action;
+
+  const _HeaderActionPill({required this.action});
+
+  @override
+  Widget build(BuildContext context) => Container(
+        width: 44,
+        height: 44,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: AppColors.accentGradient,
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.accent.withValues(alpha: 0.3),
+              blurRadius: 8,
+              spreadRadius: 1,
+            ),
+          ],
+        ),
+        child: ClipOval(
+          child: Transform.scale(
+            scale: 0.88,
+            child: IconTheme(
+              data: const IconThemeData(color: Colors.white, size: 22),
+              child: action,
+            ),
+          ),
+        ),
+      );
 }
 
 class SoftCard extends StatelessWidget {
@@ -301,8 +392,14 @@ class ShimmerList extends StatelessWidget {
 class CountUpText extends StatefulWidget {
   final double value;
   final TextStyle? style;
+  final bool monetary;
 
-  const CountUpText({super.key, required this.value, this.style});
+  const CountUpText({
+    super.key,
+    required this.value,
+    this.style,
+    this.monetary = true,
+  });
 
   @override
   State<CountUpText> createState() => _CountUpTextState();
@@ -348,7 +445,9 @@ class _CountUpTextState extends State<CountUpText>
   Widget build(BuildContext context) => AnimatedBuilder(
         animation: _animation,
         builder: (context, _) => Text(
-          Fmt.money(_animation.value),
+          widget.monetary
+              ? Fmt.money(_animation.value)
+              : Fmt.number(_animation.value),
           style: widget.style,
         ),
       );
@@ -360,6 +459,7 @@ class SummaryCard extends StatelessWidget {
   final IconData icon;
   final Color color;
   final String? subtitle;
+  final bool monetary;
 
   const SummaryCard({
     super.key,
@@ -368,6 +468,7 @@ class SummaryCard extends StatelessWidget {
     required this.icon,
     required this.color,
     this.subtitle,
+    this.monetary = true,
   });
 
   @override
@@ -402,6 +503,7 @@ class SummaryCard extends StatelessWidget {
           const SizedBox(height: 14),
           CountUpText(
             value: value,
+            monetary: monetary,
             style: const TextStyle(
               fontSize: 19,
               fontWeight: FontWeight.w900,
